@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match Details</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const socket = io();
+            const matchId = "<%= match.id %>";
+
+            socket.emit('join_match', matchId);
+
+            //Setting up global time updating signal and logic
+            socket.on('time_update', (data) => {
+                document.getElementById('current-time').textContent = data.currentTime;
+
+                document.getElementById('current-time-section').style.display = 'block';
+                document.getElementById('game-time-section').style.display = 'block';
+
+                const hours = Math.floor(data.gameTime / 3600);
+                const minutes = Math.floor((data.gameTime % 3600) / 60);
+                const seconds = data.gameTime % 60;
+                document.getElementById('game-time').textContent = `${hours}h ${minutes}m ${seconds}s`;
+            });
+
+            //Setting up set time updating signal and logic
+            socket.on('set_time_update', (timer) => {
+                document.getElementById('set-time-section').style.display = 'block';
+
+                const hours = Math.floor(timer.setTimer / 3600);
+                const minutes = Math.floor((timer.setTimer % 3600) / 60);
+                const seconds = timer.setTimer % 60;
+                document.getElementById('set-time').textContent = `${hours}h ${minutes}m ${seconds}s`;
+            });
+
+            //Setting up score updating signal
+            socket.on('score_update', (data) => {
+                document.getElementById('add-point-teamA').textContent = data.scoreA;
+                document.getElementById('add-point-teamB').textContent = data.scoreB;
+                document.getElementById('match-status').textContent = `Status: ${data.match.status}`;
+
+                if (data.setOver) {
+                    document.getElementById('end-set-btn').style.display = 'block';
+                } else {
+                    document.getElementById('end-set-btn').style.display = 'none';
+                }
+
+                if (data.match) {
+                    document.getElementById('game-result-A').textContent = data.match.result.split(':')[0];
+                    document.getElementById('game-result-B').textContent = data.match.result.split(':')[1];
+                }
+
+                if (data.matchOver) {
+                    document.getElementById('end-match-btn').style.display = 'block';
+                }
+            });
+
+            //Setting up match ending signal
+            socket.on('end_match', () => {
+                window.location.href = '/';
+            });
+
+            //Setting up signal to swap sides
+            socket.on('swap_sides', (data) => {
+                const teamA = document.getElementById('teamA');
+                const teamB = document.getElementById('teamB');
+                const teams = document.getElementById('teams-section');
+                if (data.flag === true) {
+                    teams.insertBefore(teamB, teamA);
+                } else {
+                    teams.insertBefore(teamA, teamB);
+                }
+            });
+
+            //Before exiting page disconnecting from match
+            window.addEventListener('beforeunload', () => {
+                socket.emit('leave_match', matchId);
+            });
+        });
+
+        //Function sends request to end set
+        function endSet() {
+            const matchId = "<%= match.id %>";
+            fetch(`/matches/${matchId}/end-set`, {
+                method: 'PUT',
+                headers: {
+                    'Content-type': 'application/json'
+                }
+            }).then(response => response.json());
+        }
+
+        //Function sends request to end match
+        function endMatch() {
+            const matchId = "<%= match.id %>";
+            fetch(`/matches/${matchId}/end-match`, {
+                method: 'PUT',
+                headers: {
+                    'Content-type': 'application/json'
+                },
+            }).then(response => response.json())
+            .then(() => {
+                window.location.href = '/';
+            });
+        }
+
+        //Function sends request to increment score of given team
+        function updateScore(team) {
+            const matchId = "<%= match.id %>";
+            fetch(`/matches/${matchId}/score`, {
+                method: 'PUT',
+                headers: {
+                    'Content-type': 'application/json'
+                },
+                body: JSON.stringify({ team })
+            });
+        }
+
+        //Function sends request to decrement score of given team
+        function subScore(team) {
+            const matchId = "<%= match.id %>";
+            fetch(`/matches/${matchId}/sub-score`, {
+                method: 'PUT',
+                headers: {
+                    'Content-type': 'application/json'
+                },
+                body: JSON.stringify({ team })
+            });
+        }
+
+        //Function sends request to swap sides
+        function changeSides() {
+            const matchId = "<%= match.id %>";
+            fetch(`/matches/${matchId}/swap-sides`, {
+                method: 'GET',
+                headers: {
+                    'Content-type': 'application/json'
+                },
+            });
+        }
+    </script>
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="mb-4">
+            <h1 class="text-center">Match Details</h1>
+            <p id="match-status" class="text-center"><span>Status: <%= match.status %></span></p>
+        </div>
+
+        <div id="statuses-section" class="mb-4">
+            <p id="current-time-section" class="text-center font-weight-bold" style="display:none;">Current Time: <span id="current-time"></span></p>
+            <p id="game-time-section" class="text-center font-weight-bold" style="display:none;">Game Time: <span id="game-time"></span></p>
+            <p id="set-time-section" class="text-center font-weight-bold" style="display:none;">Set Time: <span id="set-time"></span></p>
+        </div>
+
+        <div class="d-flex justify-content-between mb-4">
+            <button id="change-sides" class="btn btn-info" onclick="changeSides()">
+                <span class="material-symbols-outlined">swap_horiz</span>
+            </button>
+        </div>
+
+        <div id="teams-section" class="d-flex justify-content-around mb-4">
+            <div id="teamA" class="text-center border rounded p-2 d-flex row">
+                <h2><%= match.teamA_name %></h2>
+                <p id="game-result-A"><strong><%= match.result.split(':')[0] %></strong></p>
+                <button id="add-point-teamA" class="btn btn-success" onclick="updateScore('<%= match.teamA_name %>')">
+                    <span id="teamA-score"><%= match.resultDetailed ? match.resultDetailed.resD[match.resultDetailed.resD.length - 1].split(':')[0] : '0' %></span>
+                </button>
+                <button id="sub-point-teamA" class="btn btn-warning" onclick="subScore('<%= match.teamA_name %>')">
+                    -1
+                </button>
+            </div>
+            <div id="teamB" class="text-center border rounded p-2 d-flex row">
+                <h2><%= match.teamB_name %></h2>
+                <p id="game-result-B"><strong><%= match.result.split(':')[1] %></strong></p>
+                <button id="add-point-teamB" class="btn btn-success" onclick="updateScore('<%= match.teamB_name %>')">
+                    <span id="teamB-score"><%= match.resultDetailed ? match.resultDetailed.resD[match.resultDetailed.resD.length - 1].split(':')[1] : '0' %></span>
+                </button>
+                <button id="sub-point-teamB" class="btn btn-warning" onclick="subScore('<%= match.teamB_name %>')">
+                    -1
+                </button>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between mb-4">
+            <button id="end-set-btn" class="btn btn-danger" style="display:none;" onclick="endSet()">End Set</button>
+            <button id="end-match-btn" class="btn btn-danger" style="display:none" onclick="endMatch()">End Match</button>
+        </div>
+
+        <button id="back-btn" class="btn btn-secondary" onclick="window.location.href='/'">Back to Matches</button>
+    </div>
+</body>
+</html>
